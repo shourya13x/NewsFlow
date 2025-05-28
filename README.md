@@ -44,13 +44,17 @@ Ensure a simulator/emulator or device is connected.
 
 ## 📸 Screenshots
 
-**iOS:**
+**iOS 1:**
 
-![iOS Screenshot](screenshots/ios_screenshot.png)
+![iOS Screenshot](screenshots/ios.png)
+
+**iOS 2:**
+
+![iOS Screenshot 2](screenshots/ios2.png)
 
 **Android:**
 
-![Android Screenshot](screenshots/android_screenshot.png)
+![Android Screenshot](screenshots/android.jpg)
 
 ---
 
