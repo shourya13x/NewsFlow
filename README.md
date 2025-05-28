@@ -44,9 +44,20 @@ Ensure a simulator/emulator or device is connected.
 
 ## 📸 Screenshots
 
-| iOS | Android |
-| --- | --- |
-| ![iOS Screenshot 1](screenshots/iOS.png)<br>![iOS Screenshot 2](screenshots/ios2.png) | ![Android Screenshot](screenshots/android.jpg) |
+<div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+
+  <div style="flex: 1; min-width: 45%;">
+    <h4>iOS</h4>
+    <img src="screenshots/ios.png" alt="iOS Screenshot 1" width="100%">
+    <img src="screenshots/ios2.png" alt="iOS Screenshot 2" width="100%" style="margin-top: 10px;">
+  </div>
+
+  <div style="flex: 1; min-width: 45%;">
+    <h4>Android</h4>
+    <img src="screenshots/android.jpg" alt="Android Screenshot" width="100%">
+  </div>
+
+</div>
 
 ---
 
