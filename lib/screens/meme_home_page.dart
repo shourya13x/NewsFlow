@@ -2,6 +2,8 @@ import 'package:api_integration/models/meme_model.dart';
 import 'package:api_integration/widgets/meme_card.dart';
 import 'package:flutter/material.dart';
 import 'package:api_integration/services/meme_service.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:ui';
 
 class MemeHomePage extends StatefulWidget {
   const MemeHomePage({super.key});
