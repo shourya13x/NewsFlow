@@ -248,4 +248,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 *Connect with me: [LinkedIn](https://www.linkedin.com/in/shouryagupta13/) | [GitHub](https://github.com/shourya13x)*
 
-</div>
+</div># GitGiggles-Memes-news-and-dev-drama-all-in-one
