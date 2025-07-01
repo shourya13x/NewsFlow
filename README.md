@@ -1,75 +1,106 @@
-# 📰 NewsFlow - Flutter News App
+# NewsFlow 📰
 
-<div align="center">
+<p align="center">
+  <img src="screenshots/home.png" alt="Home" width="30%"/>
+  <img src="screenshots/content.png" alt="Content" width="30%"/>
+  <img src="screenshots/settings.png" alt="Settings" width="30%"/>
+</p>
 
-![Flutter](https://img.shields.io/badge/Flutter-3.0+-blue?style=for-the-badge&logo=flutter)
-![Dart](https://img.shields.io/badge/Dart-3.0+-blue?style=for-the-badge&logo=dart)
+## Overview ✨
 
-A Flutter app for reading the latest news from multiple sources, with category filtering and light/dark themes.
-
-</div>
-
-## 📱 Screenshots
-
-<div align="center">
-
-🟦 **Home Screen**
-
-![Home Screen](screenshots/home.png)
-
-📰 **Content Screen**
-
-![Content Screen](screenshots/content.png)
-
-⚙️ **Settings Screen**
-
-![Settings Screen](screenshots/settings.png)
-
-</div>
+**NewsFlow** is a modern Flutter app that aggregates news from multiple APIs, providing real-time updates, category filtering, favorites, and a polished user experience with light/dark themes.
 
 ---
 
-## ✨ Features
-- 🌐 News from multiple APIs
-- 🕒 Real-time data fetching (latest headlines on every refresh)
-- 🔄 Pull to refresh
-- 🗂️ Browse by categories
-- ⭐ Save to favorites
-- 🌙 Light & dark theme
+## Features 🚀
+
+- 🔄 Real-time news fetching from multiple APIs
+- 🗂️ Category filtering
+- 🌙 Light & dark themes
+- ⭐ Favorites management
+- ⬇️ Pull-to-refresh
+- 📱 Responsive UI for all devices
 
 ---
 
-## 🔌 APIs Used
-- 🏆 NewsAPI.org
-- 📰 GNews
-- 💡 Bing News
-- 🌍 MediaStack
-- 📡 NewsData.io
+## APIs Used 🌐
+
+- [NewsAPI.org](https://newsapi.org/)
+- [GNews](https://gnews.io/)
+- [Bing News](https://www.bing.com/news)
+- [MediaStack](https://mediastack.com/)
+- [NewsData.io](https://newsdata.io/)
 
 ---
 
-## 🛠️ Problems Faced
-- 🔑 **API Key Limits:** Free APIs have strict rate limits. I implemented fallback logic and key rotation to keep news flowing.
-- 🖼️ **Image Consistency:** Some articles lack images. I filter out such articles and use fallback images to maintain a clean UI.
-- 🗂️ **Category Mapping:** Each API uses different category names. I mapped and unified categories for a seamless user experience.
-- 🔄 **Refreshing Data:** To avoid cached or repeated results, I added cache-busting and randomization to API requests.
+## Technical Stack 🛠️
+
+- **Flutter** (latest stable)
+- **Provider** for state management
+- **Dart** for business logic
+- **REST API** integration
+- **Material 3** design
 
 ---
 
-## 📁 File Structure
-```
+## Project Structure 📁
+
+```plaintext
 lib/
-  📄 main.dart           # App entry point
-  📁 models/             # Data models (e.g. news, category)
-  📁 services/           # API integration and data fetching
-  📁 screens/            # UI screens (home, content, settings, etc.)
-  📁 widgets/            # Reusable UI components
+  main.dart
+  models/
+  screens/
+  services/
+  widgets/
+assets/
+  fonts/
+  images/
+screenshots/
+  home.png
+  content.png
+  settings.png
 ```
 
 ---
 
-<div align="center">
+## Getting Started 🚦
 
-Made with ❤️ by Shourya
+1. **Clone the repo:**
+   ```sh
+   git clone https://github.com/shourya13x/NewsFlow.git
+   cd NewsFlow
+   ```
+2. **Install dependencies:**
+   ```sh
+   flutter pub get
+   ```
+3. **Run the app:**
+   ```sh
+   flutter run
+   ```
 
-</div> 
+---
+
+## Contributing 🤝
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+---
+
+## Learn More
+
+- [Flutter Documentation](https://docs.flutter.dev/)
+- [State Management in Flutter](https://docs.flutter.dev/data-and-backend/state-mgmt/intro)
+
+---
+
+## Problems Faced & Solutions 🛠️
+
+- 🔑 **API key limits:** Managed by rotating keys and fallback APIs.
+- 🖼️ **Image consistency:** Handled missing/broken images gracefully.
+- 🗂️ **Category mapping:** Unified categories across APIs.
+- 🔄 **Cache-busting:** Ensured fresh data on pull-to-refresh.
+
+---
+
+**Made with ❤️ by Shourya** 
