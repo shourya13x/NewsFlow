@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:api_integration/services/news_service.dart';
-import 'package:api_integration/models/news_model.dart';
-import 'package:api_integration/screens/news_card_screen.dart';
+import 'package:newsflow/services/news_service.dart';
+import 'package:newsflow/models/news_model.dart';
+import 'package:newsflow/screens/news_card_screen.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:ui';
-import 'dart:math' as math;
+
 import 'package:provider/provider.dart';
+import '../main.dart';
 
 class FullPageNewsScreen extends StatefulWidget {
   const FullPageNewsScreen({super.key});
@@ -31,7 +32,7 @@ class _FullPageNewsScreenState extends State<FullPageNewsScreen>
   @override
   void initState() {
     super.initState();
-    newsController = TechNewsController(context: context);
+    newsController = TechNewsController(context: context, category: 'All');
     newsController.fetchInitialNews();
     _pageController = PageController();
     _fadeController = AnimationController(
@@ -273,14 +274,69 @@ class _FullPageNewsScreenState extends State<FullPageNewsScreen>
                   onPressed: controller.fetchInitialNews,
                   tooltip: 'Refresh',
                 ),
-                IconButton(
-                  icon: const Icon(Icons.bookmark_outline_rounded),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Added to favorites!')),
+                Consumer<FavoritesProvider>(
+                  builder: (context, favoritesProvider, child) {
+                    final currentNews =
+                        controller.news.isNotEmpty &&
+                                currentIndex < controller.news.length
+                            ? controller.news[currentIndex]
+                            : null;
+                    final isFavorite =
+                        currentNews != null &&
+                        favoritesProvider.isFavorite(currentNews.postLink);
+
+                    return IconButton(
+                      icon: Icon(
+                        isFavorite
+                            ? Icons.bookmark_rounded
+                            : Icons.bookmark_outline_rounded,
+                        color: isFavorite ? colorScheme.primary : null,
+                      ),
+                      onPressed:
+                          currentNews != null
+                              ? () {
+                                // Create a NewsModel from the current news data
+                                final newsModel = NewsModel(
+                                  title: currentNews.title,
+                                  description: currentNews.description,
+                                  url: currentNews.postLink,
+                                  urlToImage: currentNews.url,
+                                  publishedAt:
+                                      DateTime.now()
+                                          .subtract(const Duration(hours: 5))
+                                          .toIso8601String(),
+                                  source: currentNews.subreddit,
+                                  content:
+                                      '''In a groundbreaking development, researchers from leading institutions have unveiled significant findings that could impact various industries.
+
+This innovative research, recently published in top-tier journals, opens doors to new possibilities and applications across multiple fields.
+
+The implications of this work extend far beyond traditional boundaries, potentially revolutionizing how we approach current challenges and creating new opportunities for advancement.
+
+Further analysis and peer review continue to validate these remarkable discoveries, with experts anticipating widespread adoption and implementation in the coming months.''',
+                                  author: 'NewsFlow Reporter',
+                                  category: 'general',
+                                );
+
+                                favoritesProvider.toggleFavorite(newsModel);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      isFavorite
+                                          ? 'Removed from favorites!'
+                                          : 'Added to favorites!',
+                                    ),
+                                    duration: const Duration(seconds: 1),
+                                  ),
+                                );
+                              }
+                              : null,
+                      tooltip:
+                          isFavorite
+                              ? 'Remove from favorites'
+                              : 'Add to favorites',
                     );
                   },
-                  tooltip: 'Add to favorites',
                 ),
                 const SizedBox(width: 8),
               ],
@@ -681,23 +737,76 @@ class _FullPageNewsScreenState extends State<FullPageNewsScreen>
                                           icon: const Icon(Icons.share_rounded),
                                           tooltip: 'Share',
                                         ),
-                                        IconButton(
-                                          onPressed: () {
-                                            // TODO: Bookmark functionality
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Added to favorites!',
-                                                ),
+                                        Consumer<FavoritesProvider>(
+                                          builder: (
+                                            context,
+                                            favoritesProvider,
+                                            child,
+                                          ) {
+                                            final isFavorite = favoritesProvider
+                                                .isFavorite(news.postLink);
+                                            return IconButton(
+                                              onPressed: () {
+                                                // Create a NewsModel from the current news data
+                                                final newsModel = NewsModel(
+                                                  title: news.title,
+                                                  description: news.description,
+                                                  url: news.postLink,
+                                                  urlToImage: news.url,
+                                                  publishedAt:
+                                                      DateTime.now()
+                                                          .subtract(
+                                                            const Duration(
+                                                              hours: 5,
+                                                            ),
+                                                          )
+                                                          .toIso8601String(),
+                                                  source: news.subreddit,
+                                                  content:
+                                                      '''In a groundbreaking development, researchers from leading institutions have unveiled significant findings that could impact various industries.
+
+This innovative research, recently published in top-tier journals, opens doors to new possibilities and applications across multiple fields.
+
+The implications of this work extend far beyond traditional boundaries, potentially revolutionizing how we approach current challenges and creating new opportunities for advancement.
+
+Further analysis and peer review continue to validate these remarkable discoveries, with experts anticipating widespread adoption and implementation in the coming months.''',
+                                                  author: 'NewsFlow Reporter',
+                                                  category: 'general',
+                                                );
+
+                                                favoritesProvider
+                                                    .toggleFavorite(newsModel);
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      isFavorite
+                                                          ? 'Removed from favorites!'
+                                                          : 'Added to favorites!',
+                                                    ),
+                                                    duration: const Duration(
+                                                      seconds: 1,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              icon: Icon(
+                                                isFavorite
+                                                    ? Icons.bookmark_rounded
+                                                    : Icons
+                                                        .bookmark_outline_rounded,
+                                                color:
+                                                    isFavorite
+                                                        ? colorScheme.primary
+                                                        : null,
                                               ),
+                                              tooltip:
+                                                  isFavorite
+                                                      ? 'Remove from favorites'
+                                                      : 'Add to favorites',
                                             );
                                           },
-                                          icon: const Icon(
-                                            Icons.bookmark_outline_rounded,
-                                          ),
-                                          tooltip: 'Add to favorites',
                                         ),
                                       ],
                                     ),

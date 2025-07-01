@@ -1,6 +1,3 @@
-import 'package:api_integration/models/news_model.dart';
-import 'package:api_integration/models/category_model.dart';
-import 'package:api_integration/services/news_service.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -122,10 +119,10 @@ class _NewsCardScreenState extends State<NewsCardScreen>
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 border: Border(
                   bottom: BorderSide(
-                    color: Colors.grey.withOpacity(0.2),
+                    color: Colors.grey.withValues(alpha: 0.2),
                     width: 0.5,
                   ),
                 ),
@@ -137,7 +134,7 @@ class _NewsCardScreenState extends State<NewsCardScreen>
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
@@ -149,7 +146,7 @@ class _NewsCardScreenState extends State<NewsCardScreen>
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.share_rounded, color: Colors.black87),
@@ -226,8 +223,8 @@ class _NewsCardScreenState extends State<NewsCardScreen>
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   Colors.transparent,
-                                  Colors.black.withOpacity(0.3),
-                                  Colors.black.withOpacity(0.7),
+                                  Colors.black.withValues(alpha: 0.3),
+                                  Colors.black.withValues(alpha: 0.7),
                                 ],
                                 stops: const [0.6, 0.8, 1.0],
                               ),
@@ -245,10 +242,10 @@ class _NewsCardScreenState extends State<NewsCardScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
+                              color: Colors.black.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 width: 1,
                               ),
                             ),
@@ -284,10 +281,10 @@ class _NewsCardScreenState extends State<NewsCardScreen>
                               vertical: 8,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
+                              color: Colors.black.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.2),
+                                color: Colors.white.withValues(alpha: 0.2),
                                 width: 1,
                               ),
                             ),
@@ -320,11 +317,11 @@ class _NewsCardScreenState extends State<NewsCardScreen>
                   Container(
                     margin: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: colorScheme.surface.withOpacity(0.9),
+                      color: colorScheme.surface.withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -367,10 +364,12 @@ class _NewsCardScreenState extends State<NewsCardScreen>
                                 padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: colorScheme.surfaceContainerHigh
-                                      .withOpacity(0.7),
+                                      .withValues(alpha: 0.7),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: colorScheme.outline.withOpacity(0.2),
+                                    color: colorScheme.outline.withValues(
+                                      alpha: 0.2,
+                                    ),
                                   ),
                                 ),
                                 child: SelectableText(

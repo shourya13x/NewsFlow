@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:api_integration/screens/tech_screen.dart';
-import 'package:api_integration/screens/trending_screen.dart';
-import 'package:api_integration/screens/favorites_screen.dart';
-import 'package:api_integration/screens/settings_screen.dart';
-import 'dart:ui';
+import 'package:newsflow/screens/tech_screen.dart';
+import 'package:newsflow/screens/trending_screen.dart';
+import 'package:newsflow/screens/favorites_screen.dart';
+import 'package:newsflow/screens/settings_screen.dart';
+import 'package:provider/provider.dart';
+import '../main.dart';
 
 class NewsHomePage extends StatefulWidget {
   const NewsHomePage({super.key});
@@ -12,16 +13,14 @@ class NewsHomePage extends StatefulWidget {
   State<NewsHomePage> createState() => _NewsHomePageState();
 }
 
-class _NewsHomePageState extends State<NewsHomePage>
-    with SingleTickerProviderStateMixin {
+class _NewsHomePageState extends State<NewsHomePage> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
 
-  // Refresh callbacks for each screen
-  VoidCallback? _techScreenRefresh;
-  VoidCallback? _trendingScreenRefresh;
+  // GlobalKeys for accessing refresh methods
+  final GlobalKey<_HomeScreenState> _homeKey = GlobalKey<_HomeScreenState>();
+  final GlobalKey<_TrendingScreenWrapperState> _trendingKey =
+      GlobalKey<_TrendingScreenWrapperState>();
 
   late final List<Widget> _screens;
 
@@ -29,29 +28,16 @@ class _NewsHomePageState extends State<NewsHomePage>
   void initState() {
     super.initState();
     _screens = [
-      TechScreen(
-        onRefreshCallback: (callback) => _techScreenRefresh = callback,
-      ),
-      TrendingScreen(
-        onRefreshCallback: (callback) => _trendingScreenRefresh = callback,
-      ),
+      HomeScreen(key: _homeKey),
+      TrendingScreenWrapper(key: _trendingKey),
       const FavoritesScreen(),
       const SettingsScreen(),
     ];
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
-    );
-    _animationController.forward();
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
@@ -69,190 +55,308 @@ class _NewsHomePageState extends State<NewsHomePage>
     );
   }
 
-  void _refreshCurrentScreen() {
-    switch (_currentIndex) {
-      case 0: // Tech Screen
-        _techScreenRefresh?.call();
-        break;
-      case 1: // Trending Screen
-        _trendingScreenRefresh?.call();
-        break;
-      case 2: // Favorites Screen
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Favorites refreshed!'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-        break;
-      case 3: // Settings Screen
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Settings screen - nothing to refresh'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-        break;
+  void _refreshCurrentTab() {
+    if (_currentIndex == 0) {
+      _homeKey.currentState?.refreshNews();
+    } else if (_currentIndex == 1) {
+      _trendingKey.currentState?.refreshNews();
     }
-  }
-
-  String _getAppBarTitle() {
-    switch (_currentIndex) {
-      case 0:
-        return 'News Explorer';
-      case 1:
-        return 'Trending Stories';
-      case 2:
-        return 'Saved Articles';
-      case 3:
-        return 'Settings';
-      default:
-        return 'News Explorer';
-    }
-  }
-
-  IconData _getAppBarIcon() {
-    switch (_currentIndex) {
-      case 0:
-        return Icons.newspaper_rounded;
-      case 1:
-        return Icons.trending_up_rounded;
-      case 2:
-        return Icons.bookmark_rounded;
-      case 3:
-        return Icons.settings_rounded;
-      default:
-        return Icons.newspaper_rounded;
-    }
+    // No refresh for Saved/Profile
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        elevation: 0,
-        scrolledUnderElevation: 0,
+        title: const Text('NewsFlow'),
         backgroundColor: Colors.transparent,
-        flexibleSpace: ClipRect(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.grey.withOpacity(0.2),
-                    width: 0.5,
-                  ),
-                ),
-              ),
+        elevation: 0,
+        actions: [
+          if (_currentIndex == 0 || _currentIndex == 1)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Refresh',
+              onPressed: _refreshCurrentTab,
+            ),
+        ],
+      ),
+      body: PageView(
+        controller: _pageController,
+        onPageChanged: _onPageChanged,
+        children: _screens,
+      ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).bottomNavigationBarTheme.backgroundColor,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(0, Icons.home_rounded, 'Home'),
+                _buildNavItem(1, Icons.trending_up_rounded, 'Trending'),
+                _buildNavItem(2, Icons.bookmark_rounded, 'Saved'),
+                _buildNavItem(3, Icons.person_rounded, 'Profile'),
+              ],
             ),
           ),
         ),
-        title: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Row(
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getAppBarIcon(),
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                _getAppBarTitle(),
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search_rounded),
-            tooltip: 'Search',
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Search feature coming soon!'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
-            onPressed: _refreshCurrentScreen,
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFE3F2FD), // Very light blue
-              Color(0xFFF5F5F5), // Light grey
-              Color(0xFFFFFFFF), // White
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final isSelected = _currentIndex == index;
+    final theme = Theme.of(context);
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color:
+              isSelected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                  : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
         ),
-        child: PageView(
-          controller: _pageController,
-          onPageChanged: _onPageChanged,
-          physics: const NeverScrollableScrollPhysics(),
-          children: _screens,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color:
+                  isSelected
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline,
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color:
+                    isSelected
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outline,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
         ),
       ),
-      bottomNavigationBar: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: NavigationBar(
-            elevation: 0,
-            backgroundColor: Colors.white.withOpacity(0.9),
-            selectedIndex: _currentIndex,
-            onDestinationSelected: _onItemTapped,
-            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-            destinations: [
-              NavigationDestination(
-                icon: const Icon(Icons.newspaper_outlined),
-                selectedIcon: const Icon(Icons.newspaper_rounded),
-                label: 'News',
+    );
+  }
+}
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  int _selectedCategoryIndex = 0;
+  VoidCallback? _techRefreshCallback;
+
+  final List<String> _categories = [
+    'All',
+    'Politics',
+    'Sports',
+    'Technology',
+    'Health',
+    'Entertainment',
+    'Business',
+    'Science',
+  ];
+
+  // Add this method for global refresh
+  void refreshNews() {
+    _techRefreshCallback?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Header with greeting and theme toggle
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Good Morning!',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Discover Latest News',
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Theme toggle button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      onPressed: themeProvider.toggleTheme,
+                      icon: Icon(
+                        themeProvider.isDarkMode
+                            ? Icons.light_mode
+                            : Icons.dark_mode,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Notifications
+                  Container(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      onPressed: () {},
+                      icon: Icon(
+                        Icons.notifications_rounded,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              NavigationDestination(
-                icon: const Icon(Icons.trending_up_outlined),
-                selectedIcon: const Icon(Icons.trending_up_rounded),
-                label: 'Trending',
+            ),
+
+            // Categories
+            SizedBox(
+              height: 40,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                itemCount: _categories.length,
+                itemBuilder: (context, index) {
+                  final isSelected = _selectedCategoryIndex == index;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCategoryIndex = index;
+                        });
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              isSelected
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          _categories[index],
+                          style: TextStyle(
+                            color:
+                                isSelected
+                                    ? theme.colorScheme.onPrimary
+                                    : theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
-              NavigationDestination(
-                icon: const Icon(Icons.bookmark_outline_rounded),
-                selectedIcon: const Icon(Icons.bookmark_rounded),
-                label: 'Saved',
+            ),
+
+            const SizedBox(height: 24),
+
+            // News list - Use TechScreen to show actual news
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: TechScreen(
+                  category: _categories[_selectedCategoryIndex],
+                  onRefreshCallback: (callback) {
+                    _techRefreshCallback = callback;
+                  },
+                ),
               ),
-              NavigationDestination(
-                icon: const Icon(Icons.settings_outlined),
-                selectedIcon: const Icon(Icons.settings_rounded),
-                label: 'Settings',
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+// Wrapper for TrendingScreen to expose refresh method
+class TrendingScreenWrapper extends StatefulWidget {
+  const TrendingScreenWrapper({Key? key}) : super(key: key);
+
+  @override
+  State<TrendingScreenWrapper> createState() => _TrendingScreenWrapperState();
+}
+
+class _TrendingScreenWrapperState extends State<TrendingScreenWrapper> {
+  VoidCallback? _trendingRefreshCallback;
+  bool _isDisposed = false;
+
+  void refreshNews() {
+    if (!_isDisposed && mounted) {
+      _trendingRefreshCallback?.call();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TrendingScreen(
+      onRefreshCallback: (callback) {
+        _trendingRefreshCallback = callback;
+      },
     );
   }
 }

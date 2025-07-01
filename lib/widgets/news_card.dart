@@ -1,8 +1,9 @@
-import 'package:api_integration/main.dart';
+import 'package:newsflow/main.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:ui';
-import 'package:api_integration/screens/news_card_screen.dart' as news_screen;
+import 'package:newsflow/screens/article_detail_screen.dart';
+import 'package:newsflow/models/news_model.dart';
+import 'package:provider/provider.dart';
 
 class NewsCard extends StatefulWidget {
   final String title;
@@ -11,7 +12,6 @@ class NewsCard extends StatefulWidget {
   final String postLink;
   final int index;
   final String subreddit;
-  final VoidCallback? onAddToFavorites;
 
   const NewsCard({
     super.key,
@@ -21,7 +21,6 @@ class NewsCard extends StatefulWidget {
     required this.postLink,
     required this.index,
     required this.subreddit,
-    this.onAddToFavorites,
   });
 
   @override
@@ -34,7 +33,6 @@ class _NewsCardState extends State<NewsCard>
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
   bool _isHovered = false;
-  bool _isBookmarked = false;
 
   @override
   void initState() {
@@ -62,12 +60,45 @@ class _NewsCardState extends State<NewsCard>
   }
 
   void _toggleBookmark() {
-    setState(() {
-      _isBookmarked = !_isBookmarked;
-    });
-    if (widget.onAddToFavorites != null) {
-      widget.onAddToFavorites!();
-    }
+    final favoritesProvider = Provider.of<FavoritesProvider>(
+      context,
+      listen: false,
+    );
+
+    // Create a NewsModel from the current article data
+    final newsModel = NewsModel(
+      title: widget.title,
+      description: 'Read the full article to learn more about this story.',
+      url: widget.postLink,
+      urlToImage: widget.imageUrl,
+      publishedAt:
+          DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+      source: widget.subreddit,
+      content:
+          '''In a groundbreaking development, researchers from leading institutions have unveiled significant findings that could impact various industries.
+
+This innovative research, recently published in top-tier journals, opens doors to new possibilities and applications across multiple fields.
+
+The implications of this work extend far beyond traditional boundaries, potentially revolutionizing how we approach current challenges and creating new opportunities for advancement.
+
+Further analysis and peer review continue to validate these remarkable discoveries, with experts anticipating widespread adoption and implementation in the coming months.''',
+      author: 'NewsFlow Reporter',
+      category: 'general',
+    );
+
+    favoritesProvider.toggleFavorite(newsModel);
+
+    // Show feedback to user
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          favoritesProvider.isFavorite(widget.postLink)
+              ? 'Added to favorites!'
+              : 'Removed from favorites!',
+        ),
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   void _shareArticle() {
@@ -81,21 +112,40 @@ class _NewsCardState extends State<NewsCard>
   }
 
   void _showNewsDetails(BuildContext context) {
+    // Convert current data to NewsModel for the new screen
+    final newsModel = NewsModel(
+      title: widget.title,
+      description: 'Read the full article to learn more about this story.',
+      url: widget.postLink,
+      urlToImage: widget.imageUrl,
+      publishedAt:
+          DateTime.now().subtract(const Duration(hours: 5)).toIso8601String(),
+      source: widget.subreddit,
+      content:
+          '''In a groundbreaking development, researchers from leading institutions have unveiled significant findings that could impact various industries.
+
+This innovative research, recently published in top-tier journals, opens doors to new possibilities and applications across multiple fields.
+
+The implications of this work extend far beyond traditional boundaries, potentially revolutionizing how we approach current challenges and creating new opportunities for advancement.
+
+Further analysis and peer review continue to validate these remarkable discoveries, with experts anticipating widespread adoption and implementation in the coming months.''',
+      author: 'NewsFlow Reporter',
+      category: 'general',
+    );
+
     Navigator.of(context).push(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) {
           return FadeTransition(
             opacity: animation,
-            child: news_screen.NewsCardScreen(
-              title: widget.title,
-              imageUrl: widget.imageUrl,
-              ups: widget.ups,
-              postLink: widget.postLink,
-              subreddit: widget.subreddit,
+            child: ArticleDetailScreen(
+              article: newsModel,
+              notificationCount: 3,
             ),
           );
         },
-        transitionDuration: const Duration(milliseconds: 300),
+        transitionDuration: const Duration(milliseconds: 400),
+        reverseTransitionDuration: const Duration(milliseconds: 300),
       ),
     );
   }
@@ -121,8 +171,8 @@ class _NewsCardState extends State<NewsCard>
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: colorScheme.primary.withOpacity(
-                        _isHovered ? 0.15 : 0.08,
+                      color: colorScheme.primary.withValues(
+                        alpha: _isHovered ? 0.15 : 0.08,
                       ),
                       blurRadius: _isHovered ? 20 : 12,
                       offset: Offset(0, _isHovered ? 8 : 4),
@@ -137,8 +187,10 @@ class _NewsCardState extends State<NewsCard>
                     child: InkWell(
                       onTap: () => _showNewsDetails(context),
                       borderRadius: BorderRadius.circular(16),
-                      splashColor: colorScheme.primary.withOpacity(0.1),
-                      highlightColor: colorScheme.primary.withOpacity(0.05),
+                      splashColor: colorScheme.primary.withValues(alpha: 0.1),
+                      highlightColor: colorScheme.primary.withValues(
+                        alpha: 0.05,
+                      ),
                       child: Container(
                         decoration: BoxDecoration(
                           color: colorScheme.surface,
@@ -188,9 +240,13 @@ class _NewsCardState extends State<NewsCard>
                                                     end: Alignment.bottomRight,
                                                     colors: [
                                                       colorScheme.primary
-                                                          .withOpacity(0.1),
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
                                                       colorScheme.secondary
-                                                          .withOpacity(0.1),
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
                                                     ],
                                                   ),
                                                 ),
@@ -214,9 +270,13 @@ class _NewsCardState extends State<NewsCard>
                                                     end: Alignment.bottomRight,
                                                     colors: [
                                                       colorScheme.primary
-                                                          .withOpacity(0.1),
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
                                                       colorScheme.secondary
-                                                          .withOpacity(0.1),
+                                                          .withValues(
+                                                            alpha: 0.1,
+                                                          ),
                                                     ],
                                                   ),
                                                 ),
@@ -225,7 +285,7 @@ class _NewsCardState extends State<NewsCard>
                                                       .image_not_supported_rounded,
                                                   size: 48,
                                                   color: colorScheme.onSurface
-                                                      .withOpacity(0.5),
+                                                      .withValues(alpha: 0.5),
                                                 ),
                                               ),
                                         ),
@@ -242,7 +302,7 @@ class _NewsCardState extends State<NewsCard>
                                           end: Alignment.bottomCenter,
                                           colors: [
                                             Colors.transparent,
-                                            Colors.black.withOpacity(0.2),
+                                            Colors.black.withValues(alpha: 0.2),
                                           ],
                                         ),
                                       ),
@@ -259,8 +319,8 @@ class _NewsCardState extends State<NewsCard>
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: colorScheme.primary.withOpacity(
-                                          0.9,
+                                        color: colorScheme.primary.withValues(
+                                          alpha: 0.9,
                                         ),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
@@ -286,7 +346,9 @@ class _NewsCardState extends State<NewsCard>
                                           vertical: 3,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.7),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.7,
+                                          ),
                                           borderRadius: BorderRadius.circular(
                                             10,
                                           ),
@@ -383,27 +445,44 @@ class _NewsCardState extends State<NewsCard>
                                                 padding: EdgeInsets.zero,
                                               ),
                                             ),
-                                            IconButton(
-                                              onPressed: _toggleBookmark,
-                                              icon: Icon(
-                                                _isBookmarked
-                                                    ? Icons.bookmark_rounded
-                                                    : Icons
-                                                        .bookmark_outline_rounded,
-                                                size: 18,
-                                                color:
-                                                    _isBookmarked
-                                                        ? colorScheme.primary
-                                                        : null,
-                                              ),
-                                              tooltip:
-                                                  _isBookmarked
-                                                      ? 'Remove from favorites'
-                                                      : 'Add to favorites',
-                                              style: IconButton.styleFrom(
-                                                minimumSize: const Size(32, 32),
-                                                padding: EdgeInsets.zero,
-                                              ),
+                                            Consumer<FavoritesProvider>(
+                                              builder: (
+                                                context,
+                                                favoritesProvider,
+                                                child,
+                                              ) {
+                                                final isFavorite =
+                                                    favoritesProvider
+                                                        .isFavorite(
+                                                          widget.postLink,
+                                                        );
+                                                return IconButton(
+                                                  onPressed: _toggleBookmark,
+                                                  icon: Icon(
+                                                    isFavorite
+                                                        ? Icons.bookmark_rounded
+                                                        : Icons
+                                                            .bookmark_outline_rounded,
+                                                    size: 18,
+                                                    color:
+                                                        isFavorite
+                                                            ? colorScheme
+                                                                .primary
+                                                            : null,
+                                                  ),
+                                                  tooltip:
+                                                      isFavorite
+                                                          ? 'Remove from favorites'
+                                                          : 'Add to favorites',
+                                                  style: IconButton.styleFrom(
+                                                    minimumSize: const Size(
+                                                      32,
+                                                      32,
+                                                    ),
+                                                    padding: EdgeInsets.zero,
+                                                  ),
+                                                );
+                                              },
                                             ),
                                           ],
                                         ),
@@ -425,15 +504,5 @@ class _NewsCardState extends State<NewsCard>
         );
       },
     );
-  }
-
-  String _formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
-    } else {
-      return number.toString();
-    }
   }
 }

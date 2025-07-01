@@ -1,7 +1,8 @@
-import 'package:api_integration/models/news_model.dart';
+import 'package:newsflow/models/news_model.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../models/category_model.dart';
 
 class NewsPage {
   final List<News> items;
@@ -30,54 +31,131 @@ class NewsArticle {
 }
 
 class NewsService {
-  // ... other static methods ...
+  // Top 5 Free News APIs with Image Support
+  // 1. NewsAPI.org - Free tier: 500 requests/day
+  static const String _newsApiKey =
+      'a14560e959f24c6b86ec00c73fcc22c4'; // Get from newsapi.org
+
+  // 2. GNews API - Free tier: 100 requests/day
+  static const String _gnewsApiKey =
+      '9ac72b797fbdfc4d8d2dfdfe1e037b12'; // Get from gnews.io
+
+  // 3. Bing News Search API - Free tier: 1000 requests/month
+  static const String _bingApiKey =
+      'YOUR_BING_API_KEY'; // Get from Azure portal
+
+  // 4. MediaStack API - Free tier: 500 requests/month
+  static const String _mediaStackApiKey =
+      'YOUR_MEDIASTACK_API_KEY'; // Get from mediastack.com
+
+  // 5. NewsData.io - Free tier: 200 requests/day
+  static const String _newsDataApiKey =
+      'pub_1e60436310544iobbcab99b42e3c2ba39a'; // Get from newsdata.io
+
+  static Map<String, dynamic> mapCategoryToApi(String category) {
+    // Find the category in softwareCategories
+    final cat = softwareCategories.firstWhere(
+      (c) => c.name.toLowerCase() == category.toLowerCase(),
+      orElse: () => softwareCategories.first,
+    );
+    // Standard NewsAPI categories
+    const standardCategories = [
+      'business',
+      'entertainment',
+      'general',
+      'health',
+      'science',
+      'sports',
+      'technology',
+      'politics',
+      'world',
+      'nation',
+      'finance',
+      'food',
+      'travel',
+      'art',
+      'fashion',
+      'music',
+    ];
+    // If the category or its first keyword is a standard category, use it
+    final apiCategory = cat.keywords.firstWhere(
+      (k) => standardCategories.contains(k.toLowerCase()),
+      orElse: () => '',
+    );
+    if (apiCategory.isNotEmpty) {
+      return {'category': apiCategory, 'query': null};
+    } else {
+      // Use all keywords as a search query
+      return {'category': null, 'query': cat.keywords.join(' OR ')};
+    }
+  }
 
   static Future<NewsPage?> fetchAllTechNews(
     BuildContext context, {
     int page = 1,
     String? after,
+    bool isRefresh = false,
+    String category = 'All',
   }) async {
     try {
+      final mapped = mapCategoryToApi(category);
+      final apiCategory = mapped['category'];
+      final query = mapped['query'];
+      debugPrint(
+        'Fetching real tech news from APIs - page: $page, isRefresh: $isRefresh, category: $category, apiCategory: $apiCategory, query: $query',
+      );
+      final effectivePage =
+          isRefresh ? (page + DateTime.now().millisecondsSinceEpoch % 5) : page;
       final results = await Future.wait([
-        fetchNewsApiTechHeadlines(page: page, pageSize: 20)
+        fetchNewsApiTechHeadlines(
+              page: effectivePage,
+              pageSize: 6,
+              isRefresh: isRefresh,
+              category: apiCategory,
+              query: query,
+            )
             .timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
               onTimeout: () => <NewsArticle>[],
             )
             .catchError((e) {
-              print('NewsAPI error: $e');
+              debugPrint('NewsAPI error: $e');
               return <NewsArticle>[];
             }),
-        fetchGNewsTechHeadlines(page: page, pageSize: 20)
+        fetchGNewsTechHeadlines(
+              page: effectivePage,
+              pageSize: 6,
+              isRefresh: isRefresh,
+              category: apiCategory,
+              query: query,
+            )
             .timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
               onTimeout: () => <NewsArticle>[],
             )
             .catchError((e) {
-              print('GNews error: $e');
+              debugPrint('GNews error: $e');
               return <NewsArticle>[];
             }),
-        fetchDevToArticles(page: page, pageSize: 20)
+        fetchNewsDataTechHeadlines(
+              page: effectivePage,
+              pageSize: 6,
+              isRefresh: isRefresh,
+              category: apiCategory,
+              query: query,
+            )
             .timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
               onTimeout: () => <NewsArticle>[],
             )
             .catchError((e) {
-              print('Dev.to API error: $e');
+              debugPrint('NewsData error: $e');
               return <NewsArticle>[];
             }),
-        fetchTechNewsFromReddit(context, page: page, after: after)
-            .timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => <NewsArticle>[],
-            )
-            .catchError((e) {
-              print('Reddit tech subreddits error: $e');
-              return <NewsArticle>[];
-            }),
+        Future.value(_generateMockTechArticles(effectivePage).take(2).toList()),
       ]);
 
-      // Deduplication logic (as before)
+      // Combine and deduplicate articles
       final allArticles = <NewsArticle>[];
       final seenUrls = <String>{};
       final seenTitles = <String>[];
@@ -86,6 +164,10 @@ class NewsService {
       for (final list in results) {
         for (final article in list) {
           if (article.url.isEmpty) continue;
+
+          // Only include articles with valid images
+          if (article.imageUrl == null || article.imageUrl!.isEmpty) continue;
+
           final normalizedTitle = _normalizeTitle(article.title);
           final contentHash = _createContentHash(
             article.title,
@@ -118,25 +200,14 @@ class NewsService {
 
       allArticles.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
       final uniqueArticles = allArticles.take(20).toList();
-      print(
-        'fetchAllTechNews: ${allArticles.length} total articles, taking ${uniqueArticles.length}',
+      debugPrint(
+        'fetchAllTechNews: ${allArticles.length} total articles with images, taking ${uniqueArticles.length}',
       );
 
-      final news =
-          uniqueArticles
-              .map(_newsArticleToNews)
-              .where((n) => hasValidImage(n))
-              .toList();
+      final news = uniqueArticles.map(_newsArticleToNews).toList();
+      debugPrint('fetchAllTechNews: ${news.length} articles ready for display');
 
-      print('fetchAllTechNews: ${news.length} articles with valid images');
-
-      // Always return a pagination token to ensure infinite scroll
-      // If we have valid news, great! If not, we'll still try the next page
-      final hasMore =
-          news.isNotEmpty || page < 10; // Try up to 10 pages before giving up
-      print(
-        'fetchAllTechNews: hasMore=$hasMore (${news.length} > 0 || page=$page < 10)',
-      );
+      final hasMore = news.isNotEmpty || page < 5;
       return NewsPage(news, hasMore ? (page + 1).toString() : null);
     } catch (e) {
       if (context.mounted) {
@@ -156,17 +227,666 @@ class NewsService {
         .replaceAll('\\/', '/')
         .replaceAll('&amp;', '&');
     return News(
-      postLink: article.url ?? '',
-      subreddit: article.source ?? '',
-      title: article.title ?? '',
+      postLink: article.url,
+      subreddit: article.source,
+      title: article.title,
       url: processedImageUrl,
       nsfw: false,
       spoiler: false,
       author: article.author ?? '',
       ups: 0,
       preview: processedImageUrl.isNotEmpty ? [processedImageUrl] : null,
-      description: article.description ?? '',
+      description: article.description,
     );
+  }
+
+  // 1. NewsAPI.org - Excellent image support
+  static Future<List<NewsArticle>> fetchNewsApiTechHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+    String category = 'technology',
+    String? query,
+  }) async {
+    try {
+      final queryParams = {
+        'apiKey': _newsApiKey,
+        'country': 'us',
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+      if (category != null && category.isNotEmpty) {
+        queryParams['category'] = category;
+      } else if (query != null && query.isNotEmpty) {
+        queryParams['q'] = query;
+      }
+      final url = Uri.parse(
+        'https://newsapi.org/v2/top-headlines',
+      ).replace(queryParameters: queryParams);
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'] ?? [];
+        return articles
+            .map((article) {
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: article['urlToImage'],
+                source: article['source']?['name'] ?? 'NewsAPI',
+                publishedAt:
+                    DateTime.tryParse(article['publishedAt'] ?? '') ??
+                    DateTime.now(),
+                author: article['author'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching NewsAPI headlines: $e');
+    }
+    return [];
+  }
+
+  // 2. GNews API - Good image support
+  static Future<List<NewsArticle>> fetchGNewsTechHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+    String category = 'technology',
+    String? query,
+  }) async {
+    try {
+      final queryParams = {
+        'token': _gnewsApiKey,
+        'lang': 'en',
+        'max': pageSize.toString(),
+        'page': page.toString(),
+      };
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+      if (category != null && category.isNotEmpty) {
+        queryParams['topic'] = category;
+      } else if (query != null && query.isNotEmpty) {
+        queryParams['q'] = query;
+      }
+      final url = Uri.parse(
+        'https://gnews.io/api/v4/top-headlines',
+      ).replace(queryParameters: queryParams);
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'] ?? [];
+        return articles
+            .map((article) {
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: article['image'],
+                source: article['source']?['name'] ?? 'GNews',
+                publishedAt:
+                    DateTime.tryParse(article['publishedAt'] ?? '') ??
+                    DateTime.now(),
+                author: article['author'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching GNews headlines: $e');
+    }
+    return [];
+  }
+
+  // 3. Bing News Search API - Excellent image support
+  static Future<List<NewsArticle>> fetchBingNewsTechHeadlines({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final url = Uri.parse(
+        'https://api.bing.microsoft.com/v7.0/news/search',
+      ).replace(
+        queryParameters: {
+          'q': 'technology news',
+          'count': pageSize.toString(),
+          'offset': ((page - 1) * pageSize).toString(),
+          'mkt': 'en-US',
+          'freshness': 'Day',
+        },
+      );
+
+      final response = await http.get(
+        url,
+        headers: {'Ocp-Apim-Subscription-Key': _bingApiKey},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['value'] ?? [];
+
+        return articles
+            .map((article) {
+              String? imageUrl;
+              if (article['image'] != null &&
+                  article['image']['thumbnail'] != null) {
+                imageUrl = article['image']['thumbnail']['contentUrl'];
+              }
+
+              return NewsArticle(
+                title: article['name'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: imageUrl,
+                source: article['provider']?[0]?['name'] ?? 'Bing News',
+                publishedAt:
+                    DateTime.tryParse(article['datePublished'] ?? '') ??
+                    DateTime.now(),
+                author: article['provider']?[0]?['name'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching Bing News headlines: $e');
+    }
+    return [];
+  }
+
+  // 4. MediaStack API - Good image support
+  static Future<List<NewsArticle>> fetchMediaStackTechNews({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final url = Uri.parse('http://api.mediastack.com/v1/news').replace(
+        queryParameters: {
+          'access_key': _mediaStackApiKey,
+          'categories': 'technology',
+          'languages': 'en',
+          'limit': pageSize.toString(),
+          'offset': ((page - 1) * pageSize).toString(),
+        },
+      );
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['data'] ?? [];
+
+        return articles
+            .map((article) {
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: article['image'], // MediaStack provides image field
+                source: article['source'] ?? 'MediaStack',
+                publishedAt:
+                    DateTime.tryParse(article['published_at'] ?? '') ??
+                    DateTime.now(),
+                author: article['author'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching MediaStack news: $e');
+    }
+    return [];
+  }
+
+  // 5. NewsData.io - Good image support
+  static Future<List<NewsArticle>> fetchNewsDataTechHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+    String category = 'technology',
+    String? query,
+  }) async {
+    try {
+      final queryParams = {
+        'apikey': _newsDataApiKey,
+        'language': 'en',
+        'size': pageSize.toString(),
+        'page': page.toString(),
+      };
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+      if (category != null && category.isNotEmpty) {
+        queryParams['category'] = category;
+      } else if (query != null && query.isNotEmpty) {
+        queryParams['q'] = query;
+      }
+      final url = Uri.parse(
+        'https://newsdata.io/api/1/news',
+      ).replace(queryParameters: queryParams);
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['results'] ?? [];
+        return articles
+            .map((article) {
+              String? imageUrl;
+              if (article['image_url'] != null) {
+                imageUrl = article['image_url'];
+              } else if (article['content'] != null &&
+                  article['content'].contains('img')) {
+                final imgMatch = RegExp(
+                  r'<img[^>]+src="([^"]+)"',
+                ).firstMatch(article['content']);
+                if (imgMatch != null) {
+                  imageUrl = imgMatch.group(1);
+                }
+              }
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['link'] ?? '',
+                imageUrl: imageUrl,
+                source: article['source_id'] ?? 'NewsData',
+                publishedAt:
+                    DateTime.tryParse(article['pubDate'] ?? '') ??
+                    DateTime.now(),
+                author: article['creator']?[0],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching NewsData headlines: $e');
+    }
+    return [];
+  }
+
+  // NewsData.io - General headlines
+  static Future<List<NewsArticle>> fetchNewsDataGeneralHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+  }) async {
+    try {
+      final queryParams = {
+        'apikey': _newsDataApiKey,
+        'language': 'en',
+        'size': pageSize.toString(),
+        'page': page.toString(),
+      };
+
+      // Add cache-busting parameter for refresh
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+
+      final url = Uri.parse(
+        'https://newsdata.io/api/1/news',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['results'] ?? [];
+
+        return articles
+            .map((article) {
+              String? imageUrl;
+              if (article['image_url'] != null) {
+                imageUrl = article['image_url'];
+              } else if (article['content'] != null &&
+                  article['content'].contains('img')) {
+                // Try to extract image from content if available
+                final imgMatch = RegExp(
+                  r'<img[^>]+src="([^"]+)"',
+                ).firstMatch(article['content']);
+                if (imgMatch != null) {
+                  imageUrl = imgMatch.group(1);
+                }
+              }
+
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['link'] ?? '',
+                imageUrl: imageUrl,
+                source: article['source_id'] ?? 'NewsData',
+                publishedAt:
+                    DateTime.tryParse(article['pubDate'] ?? '') ??
+                    DateTime.now(),
+                author: article['creator']?[0],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching NewsData general headlines: $e');
+    }
+    return [];
+  }
+
+  // Trending news from multiple sources with images
+  static Future<NewsPage?> fetchTrendingNews(
+    BuildContext context, {
+    String? after,
+    bool isRefresh = false,
+  }) async {
+    try {
+      debugPrint(
+        'Fetching real trending news from APIs, isRefresh: $isRefresh',
+      );
+
+      // Parse the current page from the 'after' parameter
+      int currentPage = 1;
+      if (after != null && after.startsWith('page_')) {
+        currentPage = int.tryParse(after.substring(5)) ?? 1;
+      }
+
+      // For refresh, use different page numbers to get fresh content
+      final effectivePage =
+          isRefresh
+              ? (currentPage + DateTime.now().millisecondsSinceEpoch % 5)
+              : currentPage;
+
+      final results = await Future.wait([
+        fetchNewsApiGeneralHeadlines(
+              page: effectivePage,
+              pageSize: 8,
+              isRefresh: isRefresh,
+            )
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () => <NewsArticle>[],
+            )
+            .catchError((e) {
+              debugPrint('NewsAPI trending error: $e');
+              return <NewsArticle>[];
+            }),
+        fetchGNewsGeneralHeadlines(
+              page: effectivePage,
+              pageSize: 8,
+              isRefresh: isRefresh,
+            )
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () => <NewsArticle>[],
+            )
+            .catchError((e) {
+              debugPrint('GNews trending error: $e');
+              return <NewsArticle>[];
+            }),
+        fetchNewsDataGeneralHeadlines(
+              page: effectivePage,
+              pageSize: 8,
+              isRefresh: isRefresh,
+            )
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () => <NewsArticle>[],
+            )
+            .catchError((e) {
+              debugPrint('NewsData trending error: $e');
+              return <NewsArticle>[];
+            }),
+        // Fallback with mock data - generate different mock data for each page
+        Future.value(
+          _generateMockTrendingArticles()
+              .skip((effectivePage - 1) * 4)
+              .take(4)
+              .toList(),
+        ),
+      ]);
+
+      final allArticles = <NewsArticle>[];
+      for (final list in results) {
+        allArticles.addAll(list);
+      }
+
+      // Sort by publish date and filter for images
+      allArticles.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+      final articlesWithImages =
+          allArticles
+              .where((a) => a.imageUrl != null && a.imageUrl!.isNotEmpty)
+              .take(20)
+              .toList();
+
+      final news = articlesWithImages.map(_newsArticleToNews).toList();
+
+      debugPrint(
+        'fetchTrendingNews: ${news.length} articles ready for display (page $currentPage)',
+      );
+
+      // Return the next page number, but limit to prevent infinite scrolling
+      final nextPage = currentPage < 5 ? 'page_${currentPage + 1}' : null;
+
+      return NewsPage(news, nextPage);
+    } catch (e) {
+      debugPrint('Error fetching trending news: $e');
+      return NewsPage([], null);
+    }
+  }
+
+  // NewsAPI - General headlines
+  static Future<List<NewsArticle>> fetchNewsApiGeneralHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+  }) async {
+    try {
+      final queryParams = {
+        'apiKey': _newsApiKey,
+        'country': 'us',
+        'page': page.toString(),
+        'pageSize': pageSize.toString(),
+      };
+
+      // Add cache-busting parameter for refresh
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+
+      final url = Uri.parse(
+        'https://newsapi.org/v2/top-headlines',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'] ?? [];
+
+        return articles
+            .map((article) {
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: article['urlToImage'],
+                source: article['source']?['name'] ?? 'NewsAPI',
+                publishedAt:
+                    DateTime.tryParse(article['publishedAt'] ?? '') ??
+                    DateTime.now(),
+                author: article['author'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching NewsAPI general headlines: $e');
+    }
+    return [];
+  }
+
+  // GNews - General headlines
+  static Future<List<NewsArticle>> fetchGNewsGeneralHeadlines({
+    int page = 1,
+    int pageSize = 20,
+    bool isRefresh = false,
+  }) async {
+    try {
+      final queryParams = {
+        'token': _gnewsApiKey,
+        'lang': 'en',
+        'max': pageSize.toString(),
+        'page': page.toString(),
+      };
+
+      // Add cache-busting parameter for refresh
+      if (isRefresh) {
+        queryParams['_t'] = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+
+      final url = Uri.parse(
+        'https://gnews.io/api/v4/top-headlines',
+      ).replace(queryParameters: queryParams);
+
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['articles'] ?? [];
+
+        return articles
+            .map((article) {
+              return NewsArticle(
+                title: article['title'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: article['image'],
+                source: article['source']?['name'] ?? 'GNews',
+                publishedAt:
+                    DateTime.tryParse(article['publishedAt'] ?? '') ??
+                    DateTime.now(),
+                author: article['author'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching GNews general headlines: $e');
+    }
+    return [];
+  }
+
+  // Bing News - General headlines
+  static Future<List<NewsArticle>> fetchBingNewsGeneralHeadlines({
+    int page = 1,
+    int pageSize = 20,
+  }) async {
+    try {
+      final url = Uri.parse(
+        'https://api.bing.microsoft.com/v7.0/news/search',
+      ).replace(
+        queryParameters: {
+          'q': 'breaking news',
+          'count': pageSize.toString(),
+          'offset': ((page - 1) * pageSize).toString(),
+          'mkt': 'en-US',
+          'freshness': 'Day',
+        },
+      );
+
+      final response = await http.get(
+        url,
+        headers: {'Ocp-Apim-Subscription-Key': _bingApiKey},
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List<dynamic> articles = data['value'] ?? [];
+
+        return articles
+            .map((article) {
+              String? imageUrl;
+              if (article['image'] != null &&
+                  article['image']['thumbnail'] != null) {
+                imageUrl = article['image']['thumbnail']['contentUrl'];
+              }
+
+              return NewsArticle(
+                title: article['name'] ?? '',
+                description: article['description'] ?? '',
+                url: article['url'] ?? '',
+                imageUrl: imageUrl,
+                source: article['provider']?[0]?['name'] ?? 'Bing News',
+                publishedAt:
+                    DateTime.tryParse(article['datePublished'] ?? '') ??
+                    DateTime.now(),
+                author: article['provider']?[0]?['name'],
+              );
+            })
+            .where(
+              (a) =>
+                  a.title.isNotEmpty &&
+                  a.url.isNotEmpty &&
+                  a.imageUrl != null &&
+                  a.imageUrl!.isNotEmpty,
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching Bing News general headlines: $e');
+    }
+    return [];
   }
 
   // Helper methods for deduplication
@@ -222,870 +942,70 @@ class NewsService {
     }
   }
 
-  // Fetch Dev.to tech articles
-  static Future<List<NewsArticle>> fetchDevToArticles({
-    int page = 1,
-    int pageSize = 20,
-  }) async {
-    try {
-      final url = Uri.parse('https://dev.to/api/articles').replace(
-        queryParameters: {
-          'page': page.toString(),
-          'per_page': pageSize.toString(),
-          'tag':
-              'technology,programming,webdev,ai,flutter,react,python,cloud,devops',
-        },
+  static bool hasValidImage(News news) {
+    if (news.url.isEmpty) return false;
+    if (news.url.contains('no-image') ||
+        news.url.contains('placeholder') ||
+        news.url.contains('default-image')) {
+      return false;
+    }
+    return news.url.startsWith('http') &&
+        (news.url.contains('.jpg') ||
+            news.url.contains('.jpeg') ||
+            news.url.contains('.png') ||
+            news.url.contains('.gif') ||
+            news.url.contains('.webp'));
+  }
+
+  // Mock data generators for development
+  static List<NewsArticle> _generateMockTechArticles(int page) {
+    final baseIndex = (page - 1) * 10;
+    return List.generate(10, (index) {
+      final articleIndex = baseIndex + index + 1;
+      return NewsArticle(
+        title: 'Breaking Tech News $articleIndex: Revolutionary AI Development',
+        description:
+            'Scientists have made groundbreaking discoveries in artificial intelligence that could change the way we interact with technology forever. This development promises to revolutionize multiple industries.',
+        url: 'https://example.com/tech-news-$articleIndex',
+        imageUrl: 'https://picsum.photos/800/600?random=$articleIndex',
+        source: 'TechDaily',
+        publishedAt: DateTime.now().subtract(Duration(hours: articleIndex)),
+        author: 'Tech Reporter $articleIndex',
       );
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        final List<dynamic> articles = json.decode(response.body);
-        return articles
-            .map((article) {
-              return NewsArticle(
-                title: article['title'] ?? '',
-                description: article['description'] ?? '',
-                url: article['url'] ?? '',
-                imageUrl:
-                    article['cover_image'] ?? article['social_image'] ?? '',
-                source: 'Dev.to',
-                publishedAt:
-                    DateTime.tryParse(article['published_at'] ?? '') ??
-                    DateTime.now(),
-                author: article['user']?['name'] ?? '',
-              );
-            })
-            .where((a) => a.title.isNotEmpty && a.url.isNotEmpty)
-            .toList();
-      }
-    } catch (e) {
-      print('Error fetching Dev.to articles: $e');
-    }
-    return [];
+    });
   }
 
-  // Fetch Reddit tech news from tech subreddits
-  static Future<List<NewsArticle>> fetchTechNewsFromReddit(
-    BuildContext context, {
-    int page = 1,
-    String? after,
-  }) async {
-    const List<String> techSubreddits = [
-      // Core Technology & Programming
-      'technology',
-      'programming',
-      'learnprogramming',
-      'computerscience',
-      'softwaredevelopment',
-      'coding',
-      // Software Engineering & Architecture
-      'algorithms',
-      'datastructures',
-      'systemdesign',
-      'softwarearchitecture',
-      'designpatterns',
-      // Web Development
-      'webdev',
-      'Frontend',
-      'Backend',
-      'fullstack',
-      'javascript',
-      'reactjs',
-      'vuejs',
-      'angular',
-      'nodejs',
-      'webdesign',
-      'css',
-      'html5',
-      'typescript',
-      'NextJS',
-      'svelte',
-      'nuxtjs',
-      // Mobile App Development
-      'flutterdev',
-      'dartlang',
-      'reactnative',
-      'iOSProgramming',
-      'swift',
-      'AndroidDev',
-      'kotlin',
-      'xamarin',
-      'ionic',
-      'appdev',
-      'mobiledevelopment',
-      // AI/ML & Data Science - Expanded
-      'MachineLearning',
-      'artificial',
-      'datascience',
-      'deeplearning',
-      'tensorflow',
-      'pytorch',
-      'jupyter',
-      'pandas',
-      'numpy',
-      'scipy',
-      'reinforcementlearning',
-      'computervision',
-      'NLP',
-      'LanguageTechnology',
-      'MLQuestions',
-      'learnmachinelearning',
-      'OpenAI',
-      'GPT3',
-      'StableDiffusion',
-      'AIArt',
-      'neuralnetworks',
-      'DataEngineering',
-      'statistics',
-      'rstats',
-      'analytics',
-      'MLOps',
-      'kaggle',
-      'huggingface',
-      'dalle2',
-      'midjourney',
-      'llms',
-      'chatgpt',
-      'gpt4',
-      'AIGeneratedArt',
-      'AIPromptEngineering',
-      'GenerativeAI',
-      'AIEthics',
-      'AINews',
-      'AIresearch',
-      'AIforScience',
-      'MLEngineering',
-      'BigDataAnalytics',
-      'DataVisualization',
-      'dataanalysis',
-      'datascienceproject',
-      'MLpapers',
-      'scikitlearn',
-      'KerasML',
-      // FAANG & Career
-      'cscareerquestions',
-      'ExperiencedDevs',
-      'techjobs',
-      'engineeringresumes',
-      'interviews',
-      'leetcode',
-      'bigtech',
-      'faang',
-      'remotework',
-      // Programming Languages
-      'python',
-      'java',
-      'cplusplus',
-      'csharp',
-      'golang',
-      'rust',
-      'php',
-      'ruby',
-      'scala',
-      'haskell',
-      'clojure',
-      'elixir',
-      // Frameworks & Tools
-      'django',
-      'flask',
-      'rails',
-      'laravel',
-      'spring',
-      'dotnet',
-      'express',
-      'nestjs',
-      'fastapi',
-      // DevOps & Cloud
-      'devops',
-      'docker',
-      'kubernetes',
-      'aws',
-      'azure',
-      'googlecloud',
-      'terraform',
-      'ansible',
-      'jenkins',
-      'gitlab',
-      'github',
-      'cicd',
-      // Databases & Data
-      'database',
-      'sql',
-      'mongodb',
-      'postgresql',
-      'mysql',
-      'redis',
-      'elasticsearch',
-      'datascience',
-      // UI/UX & Design
-      'UI_Design',
-      'UXDesign',
-      'userexperience',
-      'webdesign',
-      'graphic_design',
-      'figma',
-      // General Tech & Innovation
-      'Futurology',
-      'gadgets',
-      'technews',
-      'DataIsBeautiful',
-      'hardware',
-      'computers',
-      'cybersecurity',
-      'linux',
-      'opensource',
-      'startups',
-      'entrepreneur',
-      // Meme & Community
-      'ProgrammerHumor', 'techmemes', 'ITmemes', 'linuxmemes', 'pcmasterrace',
-    ];
-    try {
-      final subreddit = (List.of(techSubreddits)..shuffle()).first;
-      final url =
-          'https://www.reddit.com/r/$subreddit/top.json?limit=25&t=day${after != null ? '&after=$after' : ''}';
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List children = data['data']['children'];
-        if (children.isEmpty) return [];
-        final articles =
-            children
-                .map((item) {
-                  final d = item['data'];
-                  String? imageUrl;
-                  if (d['preview'] != null &&
-                      d['preview']['images'] != null &&
-                      d['preview']['images'].isNotEmpty) {
-                    imageUrl = d['preview']['images'][0]['source']['url'];
-                  } else if (d['url'] != null &&
-                      (d['url'].endsWith('.jpg') ||
-                          d['url'].endsWith('.jpeg') ||
-                          d['url'].endsWith('.png') ||
-                          d['url'].endsWith('.gif'))) {
-                    imageUrl = d['url'];
-                  } else if (d['thumbnail'] != null &&
-                      d['thumbnail'].toString().startsWith('http')) {
-                    imageUrl = d['thumbnail'];
-                  }
-                  return NewsArticle(
-                    title: d['title'] ?? '',
-                    description: d['selftext'] ?? '',
-                    url: 'https://reddit.com${d['permalink']}',
-                    imageUrl: imageUrl ?? '',
-                    source: d['subreddit'] ?? 'Reddit',
-                    publishedAt: DateTime.fromMillisecondsSinceEpoch(
-                      (d['created_utc'] != null)
-                          ? ((d['created_utc'] as num) * 1000).toInt()
-                          : DateTime.now().millisecondsSinceEpoch,
-                    ),
-                    author: d['author'] ?? '',
-                  );
-                })
-                .whereType<NewsArticle>()
-                .where(
-                  (a) => a.imageUrl != null && a.imageUrl.toString().isNotEmpty,
-                )
-                .toList();
-        return articles;
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading Reddit tech news: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-    return [];
-  }
+  static List<NewsArticle> _generateMockTrendingArticles() {
+    final articles = List.generate(15, (index) {
+      final articleIndex = index + 1;
+      final categories = [
+        'Politics',
+        'Sports',
+        'Entertainment',
+        'Business',
+        'Health',
+      ];
+      final category = categories[index % categories.length];
 
-  static Future<List<NewsArticle>> fetchNewsApiTechHeadlines({
-    int page = 1,
-    int pageSize = 20,
-  }) async {
-    const String apiKey =
-        'a14560e959f24c6b86ec00c73fcc22c4'; // Replace with your NewsAPI key
-    final url = Uri.parse('https://newsapi.org/v2/top-headlines').replace(
-      queryParameters: {
-        'category': 'technology',
-        'language': 'en',
-        'pageSize': pageSize.toString(),
-        'page': page.toString(),
-        'apiKey': apiKey,
-      },
-    );
-    try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List articles = data['articles'] ?? [];
-        return articles
-            .map((article) {
-              return NewsArticle(
-                title: article['title'] ?? '',
-                description: article['description'] ?? '',
-                url: article['url'] ?? '',
-                imageUrl: article['urlToImage'] ?? '',
-                source: article['source']?['name'] ?? 'NewsAPI',
-                publishedAt:
-                    DateTime.tryParse(article['publishedAt'] ?? '') ??
-                    DateTime.now(),
-                author: article['author'] ?? '',
-              );
-            })
-            .where((a) => a.title.isNotEmpty && a.url.isNotEmpty)
-            .toList();
-      }
-    } catch (e) {
-      print('Error fetching NewsAPI tech headlines: $e');
-    }
-    return [];
-  }
-
-  static Future<List<NewsArticle>> fetchGNewsTechHeadlines({
-    int page = 1,
-    int pageSize = 20,
-  }) async {
-    const String apiKey =
-        '9ac72b797fbdfc4d8d2dfdfe1e037b12'; // Replace with your GNews API key
-    final url = Uri.parse('https://gnews.io/api/v4/top-headlines').replace(
-      queryParameters: {
-        'topic': 'technology',
-        'lang': 'en',
-        'max': pageSize.toString(),
-        'page': page.toString(),
-        'token': apiKey,
-      },
-    );
-    try {
-      final response = await http.get(url);
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List articles = data['articles'] ?? [];
-        return articles
-            .map((article) {
-              return NewsArticle(
-                title: article['title'] ?? '',
-                description: article['description'] ?? '',
-                url: article['url'] ?? '',
-                imageUrl: article['image'] ?? '',
-                source:
-                    (article['source'] != null &&
-                            article['source']['name'] != null)
-                        ? article['source']['name']
-                        : 'GNews',
-                publishedAt:
-                    DateTime.tryParse(article['publishedAt'] ?? '') ??
-                    DateTime.now(),
-                author: article['author'] ?? '',
-              );
-            })
-            .where((a) => a.title.isNotEmpty && a.url.isNotEmpty)
-            .toList();
-      }
-    } catch (e) {
-      print('Error fetching GNews tech headlines: $e');
-    }
-    return [];
-  }
-
-  static int _memeSubredditIndex = 0;
-  static int _memePage = 1;
-
-  static Future<NewsPage?> fetchTechMemes(
-    BuildContext context, {
-    String? after,
-  }) async {
-    const List<String> techMemeSubreddits = [
-      // Meme subreddits
-      'ProgrammerHumor',
-      'techsupportanimals',
-      'linuxmemes',
-      'programmingmemes',
-      'codinghumor',
-      'softwaregore',
-      'techhumor',
-      'devhumor',
-      'techmemes',
-      'ITmemes',
-      'pcmasterrace',
-      // Software Engineering & Programming
-      'technology',
-      'programming',
-      'learnprogramming',
-      'webdev',
-      'Frontend',
-      'Backend',
-      'fullstack',
-      'computerscience',
-      'softwaredevelopment',
-      'coding',
-      'algorithms',
-      'datastructures',
-      'systemdesign',
-      'softwarearchitecture',
-      // Web Development
-      'javascript',
-      'reactjs',
-      'vuejs',
-      'angular',
-      'nodejs',
-      'webdesign',
-      'css',
-      'html5',
-      'typescript',
-      'NextJS',
-      'svelte',
-      'nuxtjs',
-      'tailwindcss',
-      'bootstrap',
-      'jquery',
-      // Mobile App Development
-      'flutterdev',
-      'dartlang',
-      'reactnative',
-      'iOSProgramming',
-      'swift',
-      'AndroidDev',
-      'kotlin',
-      'xamarin',
-      'ionic',
-      'appdev',
-      'mobiledevelopment',
-      // AI/ML & Data Science - Expanded
-      'MachineLearning',
-      'artificial',
-      'datascience',
-      'deeplearning',
-      'tensorflow',
-      'pytorch',
-      'jupyter',
-      'pandas',
-      'numpy',
-      'scipy',
-      'reinforcementlearning',
-      'computervision',
-      'NLP',
-      'LanguageTechnology',
-      'MLQuestions',
-      'learnmachinelearning',
-      'OpenAI',
-      'GPT3',
-      'StableDiffusion',
-      'AIArt',
-      'neuralnetworks',
-      'DataEngineering',
-      'statistics',
-      'rstats',
-      'analytics',
-      'MLOps',
-      'kaggle',
-      'huggingface',
-      'dalle2',
-      'midjourney',
-      'llms',
-      'chatgpt',
-      'gpt4',
-      'AIGeneratedArt',
-      'AIPromptEngineering',
-      'GenerativeAI',
-      'AIEthics',
-      'AINews',
-      'AIresearch',
-      'AIforScience',
-      'MLEngineering',
-      'BigDataAnalytics',
-      'DataVisualization',
-      'dataanalysis',
-      'datascienceproject',
-      'MLpapers',
-      'scikitlearn',
-      'KerasML',
-      // FAANG & Big Tech
-      'cscareerquestions',
-      'ExperiencedDevs',
-      'techjobs',
-      'engineeringresumes',
-      'interviews',
-      'leetcode',
-      'algorithms',
-      'systemdesign',
-      'bigtech',
-      'faang',
-      'remotework',
-      // Specific Programming Languages
-      'python',
-      'java',
-      'cplusplus',
-      'csharp',
-      'golang',
-      'rust',
-      'php',
-      'ruby',
-      'scala',
-      'haskell',
-      'clojure',
-      'elixir',
-      'erlang',
-      // Frameworks & Tools
-      'django',
-      'flask',
-      'rails',
-      'laravel',
-      'spring',
-      'dotnet',
-      'express',
-      'nestjs',
-      'fastapi',
-      'gin',
-      'fiber',
-      // DevOps & Infrastructure
-      'devops',
-      'docker',
-      'kubernetes',
-      'aws',
-      'azure',
-      'googlecloud',
-      'terraform',
-      'ansible',
-      'jenkins',
-      'gitlab',
-      'github',
-      'cicd',
-      // Databases
-      'database',
-      'sql',
-      'mongodb',
-      'postgresql',
-      'mysql',
-      'redis',
-      'elasticsearch',
-      'cassandra',
-      'neo4j',
-      // UI/UX & Design
-      'UI_Design',
-      'UXDesign',
-      'userexperience',
-      'webdesign',
-      'graphic_design',
-      'adobe',
-      'figma',
-      'sketch',
-      // General Tech
-      'Futurology',
-      'gadgets',
-      'technews',
-      'DataIsBeautiful',
-      'hardware',
-      'computers',
-      'cybersecurity',
-      'linux',
-      'opensource',
-      'startups',
-      'entrepreneur',
-    ];
-
-    print(
-      'fetchTechMemes: starting with after=$after, subreddit index=${_memeSubredditIndex}',
-    );
-    int tried = 0;
-    int subredditCount = techMemeSubreddits.length;
-
-    while (tried < subredditCount) {
-      final subreddit =
-          techMemeSubreddits[_memeSubredditIndex % subredditCount];
-      print(
-        'fetchTechMemes: trying subreddit $subreddit (${tried + 1}/$subredditCount)',
+      return NewsArticle(
+        title: 'Trending $category News $articleIndex: Major Development',
+        description:
+            'This is a trending story in $category that has captured worldwide attention. The implications of this development are far-reaching and significant.',
+        url: 'https://example.com/trending-$articleIndex',
+        imageUrl: 'https://picsum.photos/800/600?random=${articleIndex + 100}',
+        source: '${category}Times',
+        publishedAt: DateTime.now().subtract(
+          Duration(minutes: articleIndex * 30),
+        ),
+        author: '$category Reporter $articleIndex',
       );
-
-      final url =
-          'https://www.reddit.com/r/$subreddit/hot.json?limit=25${after != null ? '&after=$after' : ''}';
-      try {
-        final response = await http.get(Uri.parse(url));
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          final List children = data['data']['children'];
-          final afterToken = data['data']['after'];
-
-          print(
-            'fetchTechMemes: got ${children.length} posts from $subreddit, after=$afterToken',
-          );
-
-          if (children.isNotEmpty) {
-            final news =
-                children
-                    .map((item) {
-                      final d = item['data'];
-                      String? imageUrl;
-                      if (d['preview'] != null &&
-                          d['preview']['images'] != null &&
-                          d['preview']['images'].isNotEmpty) {
-                        imageUrl = d['preview']['images'][0]['source']['url'];
-                      } else if (d['url'] != null &&
-                          (d['url'].endsWith('.jpg') ||
-                              d['url'].endsWith('.jpeg') ||
-                              d['url'].endsWith('.png') ||
-                              d['url'].endsWith('.gif'))) {
-                        imageUrl = d['url'];
-                      } else if (d['thumbnail'] != null &&
-                          d['thumbnail'].toString().startsWith('http')) {
-                        imageUrl = d['thumbnail'];
-                      }
-                      if (imageUrl != null &&
-                          (imageUrl.endsWith('.jpg') ||
-                              imageUrl.endsWith('.jpeg') ||
-                              imageUrl.endsWith('.png') ||
-                              imageUrl.endsWith('.gif'))) {
-                        final news = News(
-                          postLink: 'https://reddit.com${d['permalink']}',
-                          subreddit: d['subreddit'],
-                          title: d['title'],
-                          url: imageUrl,
-                          nsfw: d['over_18'] ?? false,
-                          spoiler: d['spoiler'] ?? false,
-                          author: d['author'],
-                          ups: d['ups'] ?? 0,
-                          preview: [imageUrl],
-                        );
-                        return hasValidImage(news) ? news : null;
-                      }
-                      return null;
-                    })
-                    .whereType<News>()
-                    .toList();
-
-            print(
-              'fetchTechMemes: found ${news.length} valid posts with images',
-            );
-
-            // Move to next subreddit for next fetch to ensure variety
-            _memeSubredditIndex = (_memeSubredditIndex + 1) % subredditCount;
-
-            if (news.isNotEmpty) {
-              // Always return an after token, even if API didn't provide one
-              // This ensures we'll try the next page or subreddit
-              final nextAfter = afterToken ?? 'next_$_memePage';
-              return NewsPage(news, nextAfter);
-            }
-          }
-        }
-      } catch (e) {
-        print('fetchTechMemes: error fetching from $subreddit: $e');
-      }
-
-      // Try next subreddit
-      _memeSubredditIndex = (_memeSubredditIndex + 1) % subredditCount;
-      tried++;
-    }
-
-    // If all subreddits are empty, try next page
-    _memePage++;
-    print('fetchTechMemes: tried all subreddits, moving to page $_memePage');
-
-    // Always return something to continue pagination
-    return NewsPage([], 'page_$_memePage');
-  }
-
-  static Future<NewsPage?> fetchTechNewsByCategory(
-    BuildContext context, {
-    required List<String> categoryKeywords,
-    String? after,
-  }) async {
-    try {
-      // Randomly select a tech subreddit based on category keywords
-      final subreddit = categoryKeywords.first;
-      final url =
-          'https://www.reddit.com/r/$subreddit/hot.json?limit=25${after != null ? '&after=$after' : ''}';
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List children = data['data']['children'];
-        if (children.isEmpty) return NewsPage([], null);
-        final news =
-            children
-                .map((item) {
-                  final d = item['data'];
-                  String? imageUrl;
-                  if (d['preview'] != null &&
-                      d['preview']['images'] != null &&
-                      d['preview']['images'].isNotEmpty) {
-                    imageUrl = d['preview']['images'][0]['source']['url'];
-                  } else if (d['url'] != null &&
-                      (d['url'].endsWith('.jpg') ||
-                          d['url'].endsWith('.jpeg') ||
-                          d['url'].endsWith('.png') ||
-                          d['url'].endsWith('.gif'))) {
-                    imageUrl = d['url'];
-                  } else if (d['thumbnail'] != null &&
-                      d['thumbnail'].toString().startsWith('http')) {
-                    imageUrl = d['thumbnail'];
-                  }
-                  return News(
-                    postLink: 'https://reddit.com${d['permalink']}',
-                    subreddit: d['subreddit'],
-                    title: d['title'],
-                    url: imageUrl ?? '',
-                    nsfw: d['over_18'] ?? false,
-                    spoiler: d['spoiler'] ?? false,
-                    author: d['author'],
-                    ups: d['ups'] ?? 0,
-                    preview: imageUrl != null ? [imageUrl] : null,
-                  );
-                })
-                .whereType<News>()
-                .where((n) => hasValidImage(n))
-                .toList();
-        final afterToken = data['data']['after'];
-        return NewsPage(news, afterToken);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading category news: $e'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-    return NewsPage([], null);
-  }
-
-  static Future<NewsPage?> fetchTrendingNews(
-    BuildContext context, {
-    String? after,
-  }) async {
-    const List<String> trendingSubreddits = [
-      // General trending
-      'all',
-      'popular',
-      'trending',
-      'technology',
-      'science',
-      'worldnews',
-      'news',
-      // Programming & Tech
-      'programming',
-      'tech',
-      'futurology',
-      'gadgets',
-      'apple',
-      'android',
-      'microsoft',
-      'google',
-      'tesla',
-      'spacex',
-      // AI/ML Trending
-      'MachineLearning',
-      'artificial',
-      'OpenAI',
-      'chatgpt',
-      'gpt4',
-      'AIGeneratedArt',
-      'StableDiffusion',
-      'AINews',
-      'AIart',
-      'midjourney',
-      'dalle2',
-      'GenerativeAI',
-      'AIEthics',
-      'AIresearch',
-      'datascience',
-      'deeplearning',
-    ];
-
-    print('fetchTrendingNews: starting with after=$after');
-    int tried = 0;
-    int maxTries = 5; // Try up to 5 subreddits before giving up
-
-    while (tried < maxTries) {
-      // Randomly select a trending subreddit
-      final subreddit = (List.of(trendingSubreddits)..shuffle()).first;
-      print(
-        'fetchTrendingNews: trying subreddit $subreddit (${tried + 1}/$maxTries)',
-      );
-
-      final url =
-          'https://www.reddit.com/r/$subreddit/hot.json?limit=25${after != null ? '&after=$after' : ''}';
-      try {
-        final response = await http.get(Uri.parse(url));
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          final List children = data['data']['children'];
-          final afterToken = data['data']['after'];
-
-          print(
-            'fetchTrendingNews: got ${children.length} posts from $subreddit, after=$afterToken',
-          );
-
-          if (children.isNotEmpty) {
-            final news =
-                children
-                    .map((item) {
-                      final d = item['data'];
-                      String? imageUrl;
-                      if (d['preview'] != null &&
-                          d['preview']['images'] != null &&
-                          d['preview']['images'].isNotEmpty) {
-                        imageUrl = d['preview']['images'][0]['source']['url'];
-                      } else if (d['url'] != null &&
-                          (d['url'].endsWith('.jpg') ||
-                              d['url'].endsWith('.jpeg') ||
-                              d['url'].endsWith('.png') ||
-                              d['url'].endsWith('.gif'))) {
-                        imageUrl = d['url'];
-                      } else if (d['thumbnail'] != null &&
-                          d['thumbnail'].toString().startsWith('http')) {
-                        imageUrl = d['thumbnail'];
-                      }
-                      return News(
-                        postLink: 'https://reddit.com${d['permalink']}',
-                        subreddit: d['subreddit'],
-                        title: d['title'],
-                        url: imageUrl ?? '',
-                        nsfw: d['over_18'] ?? false,
-                        spoiler: d['spoiler'] ?? false,
-                        author: d['author'],
-                        ups: d['ups'] ?? 0,
-                        preview: imageUrl != null ? [imageUrl] : null,
-                      );
-                    })
-                    .whereType<News>()
-                    .where((n) => hasValidImage(n))
-                    .toList();
-
-            print(
-              'fetchTrendingNews: found ${news.length} valid posts with images',
-            );
-
-            if (news.isNotEmpty) {
-              // Always return an after token, even if API didn't provide one
-              final nextAfter =
-                  afterToken ??
-                  'trending_next_${DateTime.now().millisecondsSinceEpoch}';
-              return NewsPage(news, nextAfter);
-            }
-          }
-        }
-      } catch (e) {
-        print('fetchTrendingNews: error fetching from $subreddit: $e');
-      }
-
-      tried++;
-    }
-
-    // If all attempts failed, still return a token to try again later
-    print(
-      'fetchTrendingNews: tried $maxTries subreddits, returning empty page with next token',
-    );
-    return NewsPage(
-      [],
-      'trending_retry_${DateTime.now().millisecondsSinceEpoch}',
-    );
+    });
+    articles.shuffle(); // Shuffle to simulate new news order on each refresh
+    return articles;
   }
 }
 
+// Abstract controller for infinite scrolling news
 abstract class InfiniteNewsController extends ChangeNotifier {
   List<News> news = [];
   String? newsAfter;
@@ -1094,33 +1014,55 @@ abstract class InfiniteNewsController extends ChangeNotifier {
   bool isError = false;
   bool noMoreNews = false;
   BuildContext? context;
+  bool _isDisposed = false;
 
   InfiniteNewsController({this.context});
 
-  Future<NewsPage?> fetchPage({required int page, String? after});
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
 
-  Future<void> fetchInitialNews() async {
+  void _safeNotifyListeners() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  Future<NewsPage?> fetchPage({
+    required int page,
+    String? after,
+    bool isRefresh = false,
+  });
+
+  Future<void> fetchInitialNews({bool isRefresh = false}) async {
     isLoading = true;
     isError = false;
     newsAfter = null;
     noMoreNews = false;
     news.clear();
-    notifyListeners();
+    _safeNotifyListeners();
     try {
-      await _fetchUntilValid(page: 1, after: null, append: false);
+      await _fetchUntilValid(
+        page: 1,
+        after: null,
+        append: false,
+        isRefresh: isRefresh,
+      );
       isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
       isLoading = false;
       isError = true;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
   Future<void> fetchMoreNews() async {
     if (isLoadingMore || newsAfter == null || noMoreNews) return;
     isLoadingMore = true;
-    notifyListeners();
+    _safeNotifyListeners();
     try {
       await _fetchUntilValid(
         page: int.tryParse(newsAfter ?? '1') ?? 1,
@@ -1128,10 +1070,10 @@ abstract class InfiniteNewsController extends ChangeNotifier {
         append: true,
       );
       isLoadingMore = false;
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
       isLoadingMore = false;
-      notifyListeners();
+      _safeNotifyListeners();
     }
   }
 
@@ -1139,57 +1081,63 @@ abstract class InfiniteNewsController extends ChangeNotifier {
     required int page,
     String? after,
     required bool append,
+    bool isRefresh = false,
   }) async {
-    print('_fetchUntilValid called: page=$page, after=$after, append=$append');
+    debugPrint(
+      '_fetchUntilValid called: page=$page, after=$after, append=$append',
+    );
     int tries = 0;
-    int maxTries = 3; // Reduced from 10 to 3 for faster iteration
+    int maxTries = 3;
 
     while (tries < maxTries) {
-      print('Fetch attempt ${tries + 1}/$maxTries for page $page');
-      final newsPage = await fetchPage(page: page, after: after);
+      debugPrint('Fetch attempt ${tries + 1}/$maxTries for page $page');
+      final newsPage = await fetchPage(
+        page: page,
+        after: after,
+        isRefresh: isRefresh,
+      );
 
-      // If the API returned nothing at all, stop
       if (newsPage == null) {
-        print('NewsPage is null, stopping');
+        debugPrint('NewsPage is null, stopping');
         newsAfter = null;
         noMoreNews = true;
         return;
       }
 
-      print('Received ${newsPage.items.length} items, after=${newsPage.after}');
+      debugPrint(
+        'Received ${newsPage.items.length} items, after=${newsPage.after}',
+      );
       final validNews =
-          (newsPage.items).where((n) => hasValidImage(n)).toList();
-      print('Found ${validNews.length} valid items after filtering');
+          newsPage.items.where((n) => NewsService.hasValidImage(n)).toList();
+      debugPrint('Found ${validNews.length} valid items with images');
 
       if (validNews.isNotEmpty) {
         final existingUrls = news.map((n) => n.url).toSet();
         final uniqueNewItems =
             validNews.where((n) => !existingUrls.contains(n.url)).toList();
-        print('Adding ${uniqueNewItems.length} unique new items');
+        debugPrint('Adding ${uniqueNewItems.length} unique new items');
+
         if (append) {
           news.addAll(uniqueNewItems);
         } else {
           news = uniqueNewItems;
         }
 
-        // Always provide a next page token, even if the API didn't return one
-        // This ensures we'll try the next page or cycle through subreddits
         newsAfter = newsPage.after ?? (page + 1).toString();
         noMoreNews = false;
-        print('Success! Total news: ${news.length}, hasMore: true');
+        debugPrint('Success! Total news: ${news.length}, hasMore: true');
         return;
       } else {
-        // No valid items found, try next page or increment counter
-        print('No valid items found, trying next page/after token');
+        debugPrint('No valid items with images found, trying next page');
         after = newsPage.after ?? (page + 1).toString();
         page = int.tryParse(after) ?? (page + 1);
         tries++;
       }
     }
 
-    // If we tried max times and got nothing, we'll still continue
-    // by providing a next page token to try again later
-    print('Reached max tries ($maxTries), but will continue with next page');
+    debugPrint(
+      'Reached max tries ($maxTries), but will continue with next page',
+    );
     newsAfter = (page + 1).toString();
     noMoreNews = false;
   }
@@ -1200,17 +1148,39 @@ abstract class InfiniteNewsController extends ChangeNotifier {
 }
 
 class TechNewsController extends InfiniteNewsController {
-  TechNewsController({BuildContext? context}) : super(context: context);
+  final String category;
+  TechNewsController({BuildContext? context, required this.category})
+    : super(context: context);
+
   @override
-  Future<NewsPage?> fetchPage({required int page, String? after}) {
-    return NewsService.fetchAllTechNews(context!, page: page, after: after);
+  Future<NewsPage?> fetchPage({
+    required int page,
+    String? after,
+    bool isRefresh = false,
+  }) {
+    return NewsService.fetchAllTechNews(
+      context!,
+      page: page,
+      after: after,
+      isRefresh: isRefresh,
+      category: category,
+    );
   }
 }
 
 class TrendingNewsController extends InfiniteNewsController {
   TrendingNewsController({BuildContext? context}) : super(context: context);
+
   @override
-  Future<NewsPage?> fetchPage({required int page, String? after}) {
-    return NewsService.fetchTrendingNews(context!, after: after);
+  Future<NewsPage?> fetchPage({
+    required int page,
+    String? after,
+    bool isRefresh = false,
+  }) {
+    return NewsService.fetchTrendingNews(
+      context!,
+      after: after,
+      isRefresh: isRefresh,
+    );
   }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:api_integration/services/news_service.dart';
-import 'package:api_integration/widgets/news_card.dart';
-import 'package:api_integration/models/news_model.dart';
+import 'package:newsflow/services/news_service.dart';
+import 'package:newsflow/widgets/news_card.dart';
 import 'package:provider/provider.dart';
 
 class TrendingScreen extends StatefulWidget {
@@ -10,12 +9,13 @@ class TrendingScreen extends StatefulWidget {
   const TrendingScreen({super.key, this.onRefreshCallback});
 
   @override
-  State<TrendingScreen> createState() => _TrendingScreenState();
+  State<TrendingScreen> createState() => TrendingScreenState();
 }
 
-class _TrendingScreenState extends State<TrendingScreen> {
+class TrendingScreenState extends State<TrendingScreen> {
   late TrendingNewsController newsController;
   final ScrollController _scrollController = ScrollController();
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -29,11 +29,14 @@ class _TrendingScreenState extends State<TrendingScreen> {
   }
 
   void refreshNews() {
-    newsController.fetchInitialNews();
+    if (!_isDisposed && mounted) {
+      newsController.fetchInitialNews(isRefresh: true);
+    }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _scrollController.dispose();
     newsController.dispose();
     super.dispose();
@@ -77,7 +80,8 @@ class _TrendingScreenState extends State<TrendingScreen> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: controller.fetchInitialNews,
+                    onPressed:
+                        () => controller.fetchInitialNews(isRefresh: true),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                   ),
@@ -86,7 +90,7 @@ class _TrendingScreenState extends State<TrendingScreen> {
             );
           }
           return RefreshIndicator(
-            onRefresh: controller.fetchInitialNews,
+            onRefresh: () => controller.fetchInitialNews(isRefresh: true),
             child: GridView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(20),

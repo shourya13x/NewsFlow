@@ -1,3 +1,68 @@
+class NewsModel {
+  final String title;
+  final String description;
+  final String url;
+  final String urlToImage;
+  final String publishedAt;
+  final String source;
+  final String content;
+  final String author;
+  final String category;
+
+  NewsModel({
+    required this.title,
+    required this.description,
+    required this.url,
+    required this.urlToImage,
+    required this.publishedAt,
+    required this.source,
+    required this.content,
+    required this.author,
+    required this.category,
+  });
+
+  factory NewsModel.fromJson(
+    Map<String, dynamic> json, {
+    String category = 'general',
+  }) {
+    return NewsModel(
+      title: json['title'] ?? '',
+      description: json['description'] ?? '',
+      url: json['url'] ?? '',
+      urlToImage:
+          json['urlToImage'] ?? json['image'] ?? json['image_url'] ?? '',
+      publishedAt: json['publishedAt'] ?? json['published_at'] ?? '',
+      source:
+          json['source'] is Map
+              ? json['source']['name'] ?? ''
+              : json['source'] ?? '',
+      content: json['content'] ?? '',
+      author: json['author'] ?? '',
+      category: category,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'description': description,
+      'url': url,
+      'urlToImage': urlToImage,
+      'publishedAt': publishedAt,
+      'source': source,
+      'content': content,
+      'author': author,
+      'category': category,
+    };
+  }
+
+  @override
+  String toString() {
+    return 'NewsModel(title: $title, source: $source, url: $url)';
+  }
+}
+
+// Legacy News class for backward compatibility
 class News {
   late String postLink;
   late String subreddit;
@@ -37,7 +102,7 @@ class News {
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = Map<String, dynamic>();
+    final Map<String, dynamic> data = <String, dynamic>{};
     data['postLink'] = postLink;
     data['subreddit'] = subreddit;
     data['title'] = title;

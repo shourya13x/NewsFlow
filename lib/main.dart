@@ -1,9 +1,60 @@
 import 'package:flutter/material.dart';
-import 'package:api_integration/screens/news_home_page.dart';
+import 'screens/news_home_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
+import 'models/news_model.dart';
 
 void main() {
-  runApp(const NewsApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => FavoritesProvider()),
+      ],
+      child: const NewsApp(),
+    ),
+  );
+}
+
+class ThemeProvider extends ChangeNotifier {
+  bool _isDarkMode = false;
+
+  bool get isDarkMode => _isDarkMode;
+
+  void toggleTheme() {
+    _isDarkMode = !_isDarkMode;
+    notifyListeners();
+  }
+}
+
+class FavoritesProvider extends ChangeNotifier {
+  final List<NewsModel> _favorites = [];
+
+  List<NewsModel> get favorites => List.unmodifiable(_favorites);
+
+  bool isFavorite(String url) {
+    return _favorites.any((article) => article.url == url);
+  }
+
+  void toggleFavorite(NewsModel article) {
+    final index = _favorites.indexWhere((item) => item.url == article.url);
+    if (index != -1) {
+      _favorites.removeAt(index);
+    } else {
+      _favorites.add(article);
+    }
+    notifyListeners();
+  }
+
+  void removeFavorite(String url) {
+    _favorites.removeWhere((article) => article.url == url);
+    notifyListeners();
+  }
+
+  void clearAll() {
+    _favorites.clear();
+    notifyListeners();
+  }
 }
 
 class NewsApp extends StatelessWidget {
@@ -11,107 +62,156 @@ class NewsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'News Explorer',
-      theme: ThemeData(
-        useMaterial3: true,
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'NewsFlow',
+          theme: _buildLightTheme(),
+          darkTheme: _buildDarkTheme(),
+          themeMode:
+              themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+          home: const NewsHomePage(),
+        );
+      },
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      colorScheme: ColorScheme.fromSeed(
         brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          brightness: Brightness.light,
-          seedColor: const Color(0xFF2196F3), // Professional blue
-          primary: const Color(0xFF2196F3),
-          onPrimary: const Color(0xFFFFFFFF),
-          primaryContainer: const Color(0xFFE3F2FD),
-          onPrimaryContainer: const Color(0xFF1976D2),
-          secondary: const Color(0xFF009688), // Teal
-          onSecondary: const Color(0xFFFFFFFF),
-          secondaryContainer: const Color(0xFFE0F2F1),
-          onSecondaryContainer: const Color(0xFF00695C),
-          tertiary: const Color(0xFF4CAF50), // Green
-          onTertiary: const Color(0xFFFFFFFF),
-          tertiaryContainer: const Color(0xFFE8F5E8),
-          onTertiaryContainer: const Color(0xFF2E7D32),
-          error: const Color(0xFFF44336),
-          onError: const Color(0xFFFFFFFF),
-          errorContainer: const Color(0xFFFFEBEE),
-          onErrorContainer: const Color(0xFFC62828),
-          surface: const Color(0xFFFFFFFF),
-          onSurface: const Color(0xFF212121),
-          surfaceContainerLowest: const Color(0xFFFFFFFF),
-          surfaceContainerLow: const Color(0xFFF5F5F5),
-          surfaceContainer: const Color(0xFFF0F0F0),
-          surfaceContainerHigh: const Color(0xFFE8E8E8),
-          surfaceContainerHighest: const Color(0xFFE0E0E0),
-          outline: const Color(0xFFBDBDBD),
-          outlineVariant: const Color(0xFFE0E0E0),
-          shadow: const Color(0xFF000000),
-          scrim: const Color(0xFF000000),
-          inverseSurface: const Color(0xFF212121),
-          onInverseSurface: const Color(0xFFFFFFFF),
-          inversePrimary: const Color(0xFF90CAF9),
-          surfaceTint: const Color(0xFF2196F3),
-        ),
-        scaffoldBackgroundColor: const Color(0xFFFFFFFF),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          foregroundColor: Color(0xFF212121),
-          elevation: 0,
-          centerTitle: false,
-        ),
-        cardTheme: CardThemeData(
-          elevation: 4,
-          shadowColor: const Color(0xFF2196F3).withOpacity(0.1),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          color: const Color(0xFFFFFFFF),
-          surfaceTintColor: const Color(0xFF2196F3),
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFFFFFFFF),
-          selectedItemColor: Color(0xFF2196F3),
-          unselectedItemColor: Color(0xFF757575),
-          type: BottomNavigationBarType.fixed,
-          elevation: 8,
-        ),
-        navigationBarTheme: NavigationBarThemeData(
-          backgroundColor: const Color(0xFFFFFFFF),
-          indicatorColor: const Color(0xFFE3F2FD),
-          labelTextStyle: MaterialStateProperty.all(
-            const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF2196F3),
-            ),
-          ),
-          iconTheme: MaterialStateProperty.resolveWith((states) {
-            if (states.contains(MaterialState.selected)) {
-              return const IconThemeData(color: Color(0xFF2196F3));
-            }
-            return const IconThemeData(color: Color(0xFF757575));
-          }),
-          elevation: 8,
-        ),
-        textTheme: const TextTheme(
-          displayLarge: TextStyle(color: Color(0xFF212121)),
-          displayMedium: TextStyle(color: Color(0xFF212121)),
-          displaySmall: TextStyle(color: Color(0xFF212121)),
-          headlineLarge: TextStyle(color: Color(0xFF212121)),
-          headlineMedium: TextStyle(color: Color(0xFF212121)),
-          headlineSmall: TextStyle(color: Color(0xFF212121)),
-          titleLarge: TextStyle(color: Color(0xFF212121)),
-          titleMedium: TextStyle(color: Color(0xFF212121)),
-          titleSmall: TextStyle(color: Color(0xFF212121)),
-          bodyLarge: TextStyle(color: Color(0xFF212121)),
-          bodyMedium: TextStyle(color: Color(0xFF212121)),
-          bodySmall: TextStyle(color: Color(0xFF757575)),
-          labelLarge: TextStyle(color: Color(0xFF212121)),
-          labelMedium: TextStyle(color: Color(0xFF212121)),
-          labelSmall: TextStyle(color: Color(0xFF757575)),
+        seedColor: const Color(0xFF5B67CA),
+        primary: const Color(0xFF5B67CA),
+        onPrimary: const Color(0xFFFFFFFF),
+        primaryContainer: const Color(0xFFE1E3FF),
+        onPrimaryContainer: const Color(0xFF0E1A7D),
+        secondary: const Color(0xFF5C5F73),
+        onSecondary: const Color(0xFFFFFFFF),
+        secondaryContainer: const Color(0xFFE1E2F1),
+        onSecondaryContainer: const Color(0xFF191B2E),
+        tertiary: const Color(0xFF78536B),
+        onTertiary: const Color(0xFFFFFFFF),
+        tertiaryContainer: const Color(0xFFFFD8E8),
+        onTertiaryContainer: const Color(0xFF2E1125),
+        error: const Color(0xFFBA1A1A),
+        onError: const Color(0xFFFFFFFF),
+        errorContainer: const Color(0xFFFFDAD6),
+        onErrorContainer: const Color(0xFF410002),
+        surface: const Color(0xFFFEFBFF),
+        onSurface: const Color(0xFF1B1B1F),
+        surfaceContainerLowest: const Color(0xFFFFFFFF),
+        surfaceContainerLow: const Color(0xFFF5F2F7),
+        surfaceContainer: const Color(0xFFEFECF1),
+        surfaceContainerHigh: const Color(0xFFE9E6EB),
+        surfaceContainerHighest: const Color(0xFFE3E1E6),
+        outline: const Color(0xFF757681),
+        outlineVariant: const Color(0xFFC5C6D0),
+        inverseSurface: const Color(0xFF303034),
+        onInverseSurface: const Color(0xFFF2F0F4),
+        inversePrimary: const Color(0xFFBFC7FF),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFFEFBFF),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Color(0xFF1B1B1F),
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: Color(0xFF1B1B1F),
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
         ),
       ),
-      home: const NewsHomePage(),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: const Color(0xFFC5C6D0).withValues(alpha: 0.3),
+          ),
+        ),
+        color: const Color(0xFFFFFFFF),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Color(0xFFFFFFFF),
+        selectedItemColor: Color(0xFF5B67CA),
+        unselectedItemColor: Color(0xFF757681),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        brightness: Brightness.dark,
+        seedColor: const Color(0xFF5B67CA),
+        primary: const Color(0xFFBFC7FF),
+        onPrimary: const Color(0xFF0E1A7D),
+        primaryContainer: const Color(0xFF3F4C93),
+        onPrimaryContainer: const Color(0xFFE1E3FF),
+        secondary: const Color(0xFFC5C6D5),
+        onSecondary: const Color(0xFF2E3043),
+        secondaryContainer: const Color(0xFF454759),
+        onSecondaryContainer: const Color(0xFFE1E2F1),
+        tertiary: const Color(0xFFE6B7CC),
+        onTertiary: const Color(0xFF45263B),
+        tertiaryContainer: const Color(0xFF5E3C52),
+        onTertiaryContainer: const Color(0xFFFFD8E8),
+        error: const Color(0xFFFFB4AB),
+        onError: const Color(0xFF690005),
+        errorContainer: const Color(0xFF93000A),
+        onErrorContainer: const Color(0xFFFFDAD6),
+        surface: const Color(0xFF131318),
+        onSurface: const Color(0xFFE3E1E6),
+        surfaceContainerLowest: const Color(0xFF0E0E13),
+        surfaceContainerLow: const Color(0xFF1B1B20),
+        surfaceContainer: const Color(0xFF1F1F24),
+        surfaceContainerHigh: const Color(0xFF2A2A2F),
+        surfaceContainerHighest: const Color(0xFF35353A),
+        outline: const Color(0xFF8F909A),
+        outlineVariant: const Color(0xFF454652),
+        inverseSurface: const Color(0xFFE3E1E6),
+        onInverseSurface: const Color(0xFF303034),
+        inversePrimary: const Color(0xFF5B67CA),
+      ),
+      scaffoldBackgroundColor: const Color(0xFF131318),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        foregroundColor: Color(0xFFE3E1E6),
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: Color(0xFFE3E1E6),
+          fontSize: 24,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: const Color(0xFF454652).withValues(alpha: 0.3),
+          ),
+        ),
+        color: const Color(0xFF1F1F24),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Color(0xFF1F1F24),
+        selectedItemColor: Color(0xFFBFC7FF),
+        unselectedItemColor: Color(0xFF8F909A),
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
     );
   }
 }
